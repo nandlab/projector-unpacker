@@ -85,13 +85,15 @@ def unpack_projector (exe_file, output_dir, do_decompile=False):
     else:
         raise(TypeError('Could not identify file as Director projector'))
 
+    print(f"Director project file is {byteorder}-endian.")
+
     offset = 32
     data_full = data_full[offset:]
     exe_size = len(data_full)
 
     # find RIFX/XFIR and RIFF chunks
-    res = []
-    res2 = []
+    res = [] # Not compressed
+    res2 = [] # Compressed
     xres = []
 
     start_pos += 12
@@ -109,6 +111,8 @@ def unpack_projector (exe_file, output_dir, do_decompile=False):
             res.append([m.start(), m.group()[8:]])
         for m in re.finditer(b'XFIR([\x00-\xFF]{4})(MDGF|CDGF)', data):
             res2.append([m.start(), m.group()[8:]])
+
+    print(f"Found {len(res)} uncompressed and {len(res2)} compressed chunks.")
 
     if len(res) == 0:
         if len(res2) == 0:
@@ -128,6 +132,10 @@ def unpack_projector (exe_file, output_dir, do_decompile=False):
         for m in re.finditer(b'XFIR([\x00-\xFF]{4})artX', data):
             xres.append(m.start())
         is_16bit = len(xres) > 0
+
+    print(f"Found {len(xres)} Xtras.")
+    if is_16bit:
+        print("They have 16 bits.")
 
     # header template
     header = ((b'RIFX' if byteorder == 'big' else b'XFIR') +
@@ -196,9 +204,10 @@ def unpack_projector (exe_file, output_dir, do_decompile=False):
             with open(fn, 'wb') as fh:
                 fh.write(data[pos:pos + chunk_size + 8])
 
-            if do_decompile:
-                decompile(fn)
-            rebuild(fn)
+            #if do_decompile:
+            #    decompile(fn)
+            #rebuild(fn)
+            decompile(fn)
 
     else:  # non-compressed files
         logging.info('Files in projector are not compressed.')
@@ -222,9 +231,10 @@ def unpack_projector (exe_file, output_dir, do_decompile=False):
                 fh.write(int.to_bytes(1923, 4, byteorder))
                 fh.write(data_full)
 
-            if do_decompile:
-                decompile(fn)
-            rebuild(fn)
+            #if do_decompile:
+            #    decompile(fn)
+            #rebuild(fn)
+            decompile(fn)
 
     # extract xtras
     file_num = 0
@@ -253,19 +263,19 @@ def unpack_projector (exe_file, output_dir, do_decompile=False):
 
     return output_dir, len(res), len(xres)
 
-def rebuild(fn):
-    dest_file = fn + '.tmp'
-    exit_code = os.system(f'ProjectorRays --rebuild-only "{fn}" "{dest_file}" >{DEV_NULL}')
-    if exit_code != 0:
-        raise(OSError('Rebuilding failed'))
-    if os.path.isfile(dest_file):
-        os.unlink(fn)
-        os.rename(dest_file, fn)
+#def rebuild(fn):
+#    dest_file = fn + '.tmp'
+#    exit_code = os.system(f'projectorrays --rebuild-only "{fn}" "{dest_file}" >{DEV_NULL}')
+#    if exit_code != 0:
+#        raise(OSError('Rebuilding failed'))
+#    if os.path.isfile(dest_file):
+#        os.unlink(fn)
+#        os.rename(dest_file, fn)
 
 def decompile(fn):
     dest_file, ext = os.path.splitext(fn)
     dest_file += ('_decompiled.cst' if ext == '.cxt' or ext == '.cct' else '_decompiled.dir')
-    exit_code = os.system(f'ProjectorRays "{fn}" "{dest_file}" >{DEV_NULL}')
+    exit_code = os.system(f'projectorrays decompile "{fn}" -o "{dest_file}" >{DEV_NULL}')
     if exit_code != 0:
         raise(OSError('Decompiling failed'))
 
